@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -112,7 +111,7 @@ export default function AgentCard({ name, title, icon, status, output, onRerun }
               disabled={status === "in-progress"}
             >
               <RiRefreshLine className="mr-2" />
-              Rerun Agent
+              Run Agent
             </Button>
           </CardFooter>
         </CollapsibleContent>
