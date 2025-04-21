@@ -59,7 +59,6 @@ export default function Session() {
         
         setSession(data);
         
-        // Set initial agent statuses based on existing outputs
         const statuses: Record<string, AgentStatus> = {};
         agentConfigs.forEach(agent => {
           if (data.outputs?.[agent.key] && data.outputs[agent.key] !== "No output found.") {
@@ -91,36 +90,40 @@ export default function Session() {
     setAgentStatuses(prev => ({ ...prev, [agentKey]: "in-progress" }));
     
     try {
-      // TODO: In a real implementation, this would call your backend API
-      // For now, we'll simulate the agent processing with a mock output
-      const mockOutput = `Mock output for ${agentConfigs.find(a => a.key === agentKey)?.name}`;
+      const { data: { output }, error } = await supabase.functions.invoke('wedding-planner', {
+        body: { 
+          agentKey,
+          inputs: session.inputs
+        }
+      });
       
-      const { error } = await supabase
+      if (error) throw error;
+      
+      const { error: updateError } = await supabase
         .from('sessions')
         .update({
           outputs: {
             ...session.outputs,
-            [agentKey]: mockOutput
+            [agentKey]: output
           }
         })
         .eq('id', session.id);
       
-      if (error) throw error;
+      if (updateError) throw updateError;
       
-      // Update local state
       setSession(prev => ({
         ...prev!,
         outputs: {
           ...prev!.outputs,
-          [agentKey]: mockOutput
+          [agentKey]: output
         }
       }));
       
       setAgentStatuses(prev => ({ ...prev, [agentKey]: "done" }));
       
       toast({
-        title: "Agent completed",
-        description: `${agentConfigs.find(a => a.key === agentKey)?.name} has completed its task.`,
+        title: "Task completed",
+        description: `${agentConfigs.find(a => a.key === agentKey)?.name} has completed its analysis.`,
       });
     } catch (error) {
       console.error('Error running agent:', error);
@@ -128,7 +131,7 @@ export default function Session() {
       
       toast({
         variant: "destructive",
-        title: "Agent failed",
+        title: "Task failed",
         description: `Failed to run ${agentConfigs.find(a => a.key === agentKey)?.name}. Please try again.`,
       });
     }
