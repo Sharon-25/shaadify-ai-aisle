@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import Layout from "@/components/Layout";
@@ -47,6 +48,7 @@ export default function Session() {
       if (!user || !sessionId) return;
       
       try {
+        console.log("Fetching session with ID:", sessionId);
         const { data, error } = await supabase
           .from('sessions')
           .select('*')
@@ -54,14 +56,17 @@ export default function Session() {
           .single();
         
         if (error) {
+          console.error("Error fetching session:", error);
           throw error;
         }
         
+        console.log("Session data fetched:", data);
         setSession(data);
         
+        // Initialize agent statuses
         const statuses: Record<string, AgentStatus> = {};
         agentConfigs.forEach(agent => {
-          if (data.outputs?.[agent.key] && data.outputs[agent.key] !== "No output found.") {
+          if (data.outputs && data.outputs[agent.key] && data.outputs[agent.key] !== "No output found.") {
             statuses[agent.key] = "done";
           } else {
             statuses[agent.key] = "not-started";
@@ -69,7 +74,7 @@ export default function Session() {
         });
         
         setAgentStatuses(statuses);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching session:', error);
         toast({
           variant: "destructive",
@@ -87,18 +92,33 @@ export default function Session() {
   const handleRerunAgent = async (agentKey: string) => {
     if (!session || !user) return;
     
+    console.log(`Running agent ${agentKey} with inputs:`, session.inputs);
     setAgentStatuses(prev => ({ ...prev, [agentKey]: "in-progress" }));
     
     try {
-      const { data: { output }, error } = await supabase.functions.invoke('wedding-planner', {
+      // Add current date to inputs
+      const enhancedInputs = {
+        ...session.inputs,
+        current_date: new Date().toISOString().split('T')[0]
+      };
+      
+      console.log(`Calling wedding-planner function for agent ${agentKey}...`);
+      const { data, error } = await supabase.functions.invoke('wedding-planner', {
         body: { 
           agentKey,
-          inputs: session.inputs
+          inputs: enhancedInputs
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error(`Error from function:`, error);
+        throw error;
+      }
       
+      console.log(`Response from function:`, data);
+      const output = data.output || "No output generated.";
+      
+      // Update session in database
       const { error: updateError } = await supabase
         .from('sessions')
         .update({
@@ -109,15 +129,19 @@ export default function Session() {
         })
         .eq('id', session.id);
       
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error(`Error updating session:`, updateError);
+        throw updateError;
+      }
       
-      setSession(prev => ({
-        ...prev!,
+      // Update local state
+      setSession(prev => prev ? {
+        ...prev,
         outputs: {
-          ...prev!.outputs,
+          ...prev.outputs,
           [agentKey]: output
         }
-      }));
+      } : null);
       
       setAgentStatuses(prev => ({ ...prev, [agentKey]: "done" }));
       
@@ -125,7 +149,7 @@ export default function Session() {
         title: "Task completed",
         description: `${agentConfigs.find(a => a.key === agentKey)?.name} has completed its analysis.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error running agent:', error);
       setAgentStatuses(prev => ({ ...prev, [agentKey]: "failed" }));
       
@@ -138,7 +162,7 @@ export default function Session() {
   };
   
   const completedAgents = Object.values(agentStatuses).filter(status => status === "done").length;
-  const progress = (completedAgents / agentConfigs.length) * 100;
+  const progress = agentConfigs.length > 0 ? (completedAgents / agentConfigs.length) * 100 : 0;
   
   if (loading) {
     return (
@@ -187,7 +211,7 @@ export default function Session() {
           {agentConfigs.map((agent) => (
             <AgentCard
               key={agent.key}
-              name={agent.key}
+              name={agent.name}
               title={agent.name}
               icon={agent.icon}
               status={agentStatuses[agent.key] || "not-started"}

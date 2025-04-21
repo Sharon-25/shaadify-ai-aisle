@@ -11,43 +11,63 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const SERPER_API_KEY = Deno.env.get('SERPER_API_KEY');
 
 async function searchWeb(query: string) {
-  const response = await fetch('https://google.serper.dev/search', {
-    method: 'POST',
-    headers: {
-      'X-API-KEY': SERPER_API_KEY!,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      q: query,
-      num: 5
-    })
-  });
-  return await response.json();
+  console.log(`Searching web for: ${query}`);
+  try {
+    const response = await fetch('https://google.serper.dev/search', {
+      method: 'POST',
+      headers: {
+        'X-API-KEY': SERPER_API_KEY!,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        q: query,
+        num: 5
+      })
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Error in searchWeb:", error);
+    return { error: error.message, organic: [] };
+  }
 }
 
 async function getAIResponse(prompt: string, context: string = "") {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You are a wedding planning expert. Provide detailed, practical advice based on the context and query provided." },
-        { role: "user", content: `Context: ${context}\n\nQuery: ${prompt}` }
-      ],
-      temperature: 0.7
-    })
-  });
-  
-  const data = await response.json();
-  return data.choices[0].message.content;
+  console.log(`Getting AI response for prompt: ${prompt.substring(0, 100)}...`);
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are a wedding planning expert. Provide detailed, practical advice based on the context and query provided. If no context is available, use your knowledge to provide the best possible advice." },
+          { role: "user", content: `Context: ${context}\n\nQuery: ${prompt}` }
+        ],
+        temperature: 0.7
+      })
+    });
+    
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (error) {
+    console.error("Error in getAIResponse:", error);
+    return `Error generating response: ${error.message}`;
+  }
 }
 
 async function processAgentTask(agentKey: string, inputs: any) {
-  const { couple_name, wedding_date, city, guest_count, budget, theme } = inputs;
+  console.log(`Processing agent task: ${agentKey}`);
+  console.log("Inputs received:", JSON.stringify(inputs));
+
+  if (!inputs || typeof inputs !== 'object') {
+    return "Error: Invalid inputs provided";
+  }
+
+  const { couple_name, wedding_date, city, guest_count, budget, theme, culture, catering_type, 
+          travel_accommodation_count, wedding_time, invite_count, current_date } = inputs;
   
   let searchQuery = "";
   let prompt = "";
@@ -55,25 +75,77 @@ async function processAgentTask(agentKey: string, inputs: any) {
   switch(agentKey) {
     case 'venue_booking':
       searchQuery = `wedding venues in ${city} for ${guest_count} guests`;
-      prompt = `Suggest the best wedding venues in ${city} that can accommodate ${guest_count} guests. Consider the ${theme} theme and budget of ${budget}. Include specific venues with brief descriptions and estimated costs.`;
+      prompt = `As a Venue Research Bot, suggest the best wedding venues in ${city} that can accommodate ${guest_count} guests for ${couple_name}'s wedding on ${wedding_date}. Consider their budget of ${budget} and preferences. Include specific venues with brief descriptions, estimated costs, and availability information.`;
       break;
     case 'catering':
-      searchQuery = `wedding catering services ${city} ${theme} cuisine`;
-      prompt = `Recommend catering options for a ${theme} themed wedding in ${city} for ${guest_count} guests within a budget of ${budget}. Include menu suggestions and service styles.`;
+      searchQuery = `wedding catering services ${city} ${catering_type} cuisine`;
+      prompt = `As a Wedding Catering Planner, recommend catering options for a ${culture} themed wedding in ${city} for ${guest_count} guests within a budget of ${budget}. The couple prefers ${catering_type} food. Include menu suggestions, service styles, and estimated per-plate costs.`;
       break;
     case 'decoration':
-      searchQuery = `${theme} wedding decoration ideas trends ${new Date().getFullYear()}`;
-      prompt = `Create a decoration plan for a ${theme} themed wedding. Consider the venue type in ${city} and suggest color schemes, floral arrangements, and decor elements within the ${budget} budget.`;
+      searchQuery = `${culture} wedding decoration ideas ${theme || ''} trends ${new Date().getFullYear()}`;
+      prompt = `As a Wedding Decoration Planning Agent, create a decoration plan for a ${culture} themed wedding. Consider the venue in ${city} and suggest color schemes, floral arrangements, mandap designs, and decor elements within the ${budget} budget for ${couple_name}'s wedding on ${wedding_date}.`;
       break;
-    // ... Add cases for other agents
+    case 'stylists':
+      searchQuery = `bridal groom stylists ${city} ${culture} wedding`;
+      prompt = `As a Bridal & Groom Stylist Recommendation Agent, suggest 3-5 stylists in ${city} who specialize in ${culture} wedding attire. Include their contact information, social media links, service types, and price ranges for ${couple_name}'s wedding on ${wedding_date}.`;
+      break;
+    case 'accommodation':
+      searchQuery = `hotels wedding guest accommodation ${city} near wedding venues`;
+      prompt = `As an Accommodation & Stay Logistics Agent, recommend lodging options for ${travel_accommodation_count || guest_count / 2} outstation guests in ${city} for ${couple_name}'s wedding on ${wedding_date}. Include hotel names, price ranges, amenities, and proximity to the venue within ${budget} budget.`;
+      break;
+    case 'priest':
+      searchQuery = `${culture} wedding priest officiant ${city}`;
+      prompt = `As a Wedding Priest Finder Agent, suggest 2-3 priests or officiants who can perform a ${culture} wedding ceremony in ${city} on ${wedding_date} at ${wedding_time || 'the scheduled time'}. Include their languages spoken, rituals supported, and contact information.`;
+      break;
+    case 'dress':
+      searchQuery = `${culture} wedding attire shops ${city}`;
+      prompt = `As a Wedding Dress & Attire Assistant, recommend where ${couple_name} can shop for wedding attire that reflects ${culture} traditions within their ${budget} budget in ${city}. Include stores or websites, sample images, price ranges, and delivery timeframes.`;
+      break;
+    case 'transportation':
+      searchQuery = `wedding guest transportation services ${city}`;
+      prompt = `As a Wedding Transport Manager, plan transportation for ${guest_count} guests in ${city} on ${wedding_date}. Include suggested vehicle types, pickup/drop-off logistics, estimated costs, and reliable vendors that can accommodate the wedding party.`;
+      break;
+    case 'invitation':
+      searchQuery = `${culture} wedding invitation designs digital print`;
+      prompt = `As an Invitation Design & Print Agent, suggest designs for ${invite_count || guest_count} wedding invitations for ${couple_name}'s ${culture} wedding on ${wedding_date}. Include both physical and digital options, printing vendors, cost estimates, and delivery timelines.`;
+      break;
+    case 'photographer':
+      searchQuery = `wedding photographers videographers ${city}`;
+      prompt = `As a Wedding Photography Coordinator, recommend 3-5 photography teams in ${city} available for ${couple_name}'s wedding on ${wedding_date}. Include portfolio links, package details, pricing information, and contact methods within the ${budget} budget.`;
+      break;
+    case 'budget':
+      searchQuery = `wedding budget allocation ${culture} wedding ${city}`;
+      prompt = `As a Wedding Budget Allocation Planner, divide the total budget of ${budget} for ${couple_name}'s wedding with ${guest_count} guests. Provide a detailed breakdown for venue, catering, decoration, attire, accommodation, transportation, photography, and other essential categories.`;
+      break;
+    case 'checklist':
+      searchQuery = `wedding planning timeline checklist ${culture} wedding`;
+      prompt = `As a Wedding Planning Timeline Generator, create a comprehensive timeline from ${current_date || 'today'} until ${wedding_date} for ${couple_name}'s ${culture} wedding. Include monthly, weekly, and daily tasks with vendor booking deadlines and preparation milestones.`;
+      break;
+    case 'rituals':
+      searchQuery = `${culture} wedding rituals ceremonies traditions`;
+      prompt = `As a Cultural & Religious Ritual Advisor, provide detailed guidance on essential rituals for a ${culture} wedding ceremony on ${wedding_date}. Include the order of ceremonies, their significance, required items, and recommended timing for each ritual.`;
+      break;
+    case 'guest_support':
+      searchQuery = `wedding guest information package ${city}`;
+      prompt = `As a Guest Support Chat Concierge, create a comprehensive information guide for ${guest_count} guests attending ${couple_name}'s wedding in ${city} on ${wedding_date}. Include travel information, venue details, accommodation options, event timeline, dress code, and emergency contacts.`;
+      break;
+    case 'weather':
+      searchQuery = `${city} weather forecast ${wedding_date} wedding season`;
+      prompt = `As a Wedding Weather Monitor, provide a weather forecast for ${city} on and around ${wedding_date}. Include contingency suggestions for outdoor events, recommendations for guest comfort, and any seasonal considerations for ${couple_name}'s wedding.`;
+      break;
     default:
-      return "Agent not configured";
+      return `Agent '${agentKey}' not configured`;
   }
   
   try {
+    console.log(`Search query: ${searchQuery}`);
     const searchResults = await searchWeb(searchQuery);
-    const context = JSON.stringify(searchResults.organic?.slice(0, 3));
-    return await getAIResponse(prompt, context);
+    console.log(`Search results: ${searchResults.organic ? searchResults.organic.length : 0} items`);
+    
+    const context = JSON.stringify(searchResults.organic?.slice(0, 3) || []);
+    const response = await getAIResponse(prompt, context);
+    console.log(`Generated response for ${agentKey}`);
+    return response;
   } catch (error) {
     console.error(`Error in ${agentKey}:`, error);
     return `Error processing ${agentKey}: ${error.message}`;
@@ -81,18 +153,22 @@ async function processAgentTask(agentKey: string, inputs: any) {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log("Edge function called");
     const { agentKey, inputs } = await req.json();
     
-    if (!agentKey || !inputs) {
-      throw new Error('Missing required parameters');
+    if (!agentKey) {
+      throw new Error('Missing required parameter: agentKey');
     }
 
-    const result = await processAgentTask(agentKey, inputs);
+    console.log(`Processing request for agent: ${agentKey}`);
+    
+    const result = await processAgentTask(agentKey, inputs || {});
 
     return new Response(JSON.stringify({ output: result }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
