@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import Layout from "@/components/Layout";
@@ -60,10 +59,10 @@ export default function Session() {
         
         setSession(data);
         
-        // Set initial agent statuses
+        // Set initial agent statuses based on existing outputs
         const statuses: Record<string, AgentStatus> = {};
         agentConfigs.forEach(agent => {
-          if (data.outputs && data.outputs[agent.key] && data.outputs[agent.key] !== "No output found.") {
+          if (data.outputs?.[agent.key] && data.outputs[agent.key] !== "No output found.") {
             statuses[agent.key] = "done";
           } else {
             statuses[agent.key] = "not-started";
@@ -87,26 +86,52 @@ export default function Session() {
   }, [sessionId, user, supabase, toast]);
   
   const handleRerunAgent = async (agentKey: string) => {
-    if (!session) return;
+    if (!session || !user) return;
     
-    // Set agent status to in-progress
     setAgentStatuses(prev => ({ ...prev, [agentKey]: "in-progress" }));
     
-    toast({
-      title: "Agent rerun requested",
-      description: `Running ${agentConfigs.find(a => a.key === agentKey)?.name} agent...`,
-    });
-    
-    // Simulating agent run for now - in real implementation, this would call your FastAPI backend
-    setTimeout(() => {
-      // Set agent status back to done
+    try {
+      // TODO: In a real implementation, this would call your backend API
+      // For now, we'll simulate the agent processing with a mock output
+      const mockOutput = `Mock output for ${agentConfigs.find(a => a.key === agentKey)?.name}`;
+      
+      const { error } = await supabase
+        .from('sessions')
+        .update({
+          outputs: {
+            ...session.outputs,
+            [agentKey]: mockOutput
+          }
+        })
+        .eq('id', session.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setSession(prev => ({
+        ...prev!,
+        outputs: {
+          ...prev!.outputs,
+          [agentKey]: mockOutput
+        }
+      }));
+      
       setAgentStatuses(prev => ({ ...prev, [agentKey]: "done" }));
       
       toast({
         title: "Agent completed",
-        description: `${agentConfigs.find(a => a.key === agentKey)?.name} agent has completed its task.`,
+        description: `${agentConfigs.find(a => a.key === agentKey)?.name} has completed its task.`,
       });
-    }, 3000);
+    } catch (error) {
+      console.error('Error running agent:', error);
+      setAgentStatuses(prev => ({ ...prev, [agentKey]: "failed" }));
+      
+      toast({
+        variant: "destructive",
+        title: "Agent failed",
+        description: `Failed to run ${agentConfigs.find(a => a.key === agentKey)?.name}. Please try again.`,
+      });
+    }
   };
   
   const completedAgents = Object.values(agentStatuses).filter(status => status === "done").length;

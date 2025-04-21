@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
@@ -54,44 +53,37 @@ export default function NewSession() {
     setIsSubmitting(true);
     
     try {
-      // Prepare data for API
-      const apiData = {
+      const sessionData = {
         user_id: user.id,
-        couple_name: formData.coupleName,
-        wedding_date: formData.weddingDate,
-        wedding_time: formData.weddingTime,
-        guest_count: parseInt(formData.guestCount),
-        travel_accommodation_count: parseInt(formData.travelAccommodationCount),
-        budget: parseInt(formData.budget),
-        culture: formData.culture,
-        catering_type: formData.cateringType,
-        invite_count: parseInt(formData.inviteCount),
-        city: formData.city,
+        inputs: {
+          couple_name: formData.coupleName,
+          wedding_date: formData.weddingDate,
+          wedding_time: formData.weddingTime,
+          guest_count: parseInt(formData.guestCount),
+          travel_accommodation_count: parseInt(formData.travelAccommodationCount),
+          budget: parseInt(formData.budget),
+          culture: formData.culture,
+          catering_type: formData.cateringType,
+          invite_count: parseInt(formData.inviteCount),
+          city: formData.city,
+        }
       };
       
-      // Store initial session data in Supabase
-      const { data: sessionData, error: sessionError } = await supabase
-        .from("sessions")
-        .insert({
-          user_id: user.id,
-          inputs: apiData,
-          outputs: {},
-          created_at: new Date().toISOString(),
-        })
-        .select();
-        
-      if (sessionError) {
-        throw new Error(sessionError.message);
-      }
+      const { data: newSession, error } = await supabase
+        .from('sessions')
+        .insert([sessionData])
+        .select()
+        .single();
+      
+      if (error) throw error;
       
       toast({
-        title: "Session created",
+        title: "Success!",
         description: "Your wedding planning session has been created.",
       });
       
-      // Redirect to the session page
-      if (sessionData && sessionData[0]) {
-        navigate(`/session/${sessionData[0].id}`);
+      if (newSession) {
+        navigate(`/session/${newSession.id}`);
       }
     } catch (error) {
       console.error("Error creating session:", error);
