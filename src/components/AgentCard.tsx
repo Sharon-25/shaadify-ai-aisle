@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { RiArrowDownSLine, RiRefreshLine, RiCheckLine, RiTimeLine, RiErrorWarningLine } from "react-icons/ri";
+import { RiArrowDownLine, RiRefreshLine, RiCheckLine, RiTimeLine, RiErrorWarningLine } from "react-icons/ri";
 import ReactMarkdown from "react-markdown";
 
 export type AgentStatus = "done" | "in-progress" | "failed" | "not-started";
@@ -89,14 +89,14 @@ export default function AgentCard({ name, title, icon, status, output, onRerun }
             className="w-full flex items-center justify-center text-wedding-dark hover:bg-wedding-pink/10 my-1"
           >
             {isOpen ? "Hide Details" : "Show Details"}
-            <RiArrowDownSLine className={`ml-2 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+            <RiArrowDownLine className={`ml-2 transition-transform ${isOpen ? "rotate-180" : ""}`} />
           </Button>
         </CollapsibleTrigger>
         
         <CollapsibleContent>
           <CardContent className="pt-4 bg-white/50 rounded-md mt-2 max-h-96 overflow-y-auto">
             {output ? (
-              <ReactMarkdown className="prose prose-sm max-w-none">
+              <ReactMarkdown>
                 {output}
               </ReactMarkdown>
             ) : (
