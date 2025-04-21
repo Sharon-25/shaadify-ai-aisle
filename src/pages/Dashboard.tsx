@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { RiAddLine, RiCalendarLine, RiCouplesFill } from "react-icons/ri";
+import { RiAddLine, RiCalendarLine, RiGroupLine } from "react-icons/ri";
 import Layout from "@/components/Layout";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
@@ -116,7 +116,7 @@ export default function Dashboard() {
                       {session.inputs?.wedding_date ? new Date(session.inputs.wedding_date).toLocaleDateString() : "No date set"}
                     </div>
                     <div className="flex items-center text-wedding-dark/70">
-                      <RiCouplesFill className="mr-2" />
+                      <RiGroupLine className="mr-2" />
                       {session.inputs?.city || "No location set"}
                     </div>
                     <div className="text-xs text-wedding-dark/50">
