@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || "AIzaSyAitLCIHdv2itbuN0LC48t1UtfhfUEBWwY";
 const SERPER_API_KEY = Deno.env.get('SERPER_API_KEY');
 
 async function searchWeb(query: string) {
@@ -31,29 +31,48 @@ async function searchWeb(query: string) {
   }
 }
 
-async function getAIResponse(prompt: string, context: string = "") {
-  console.log(`Getting AI response for prompt: ${prompt.substring(0, 100)}...`);
+async function getGeminiResponse(prompt: string, context: string = "") {
+  console.log(`Getting Gemini response for prompt: ${prompt.substring(0, 100)}...`);
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'x-goog-api-key': GEMINI_API_KEY
       },
       body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: "You are a wedding planning expert. Provide detailed, practical advice based on the context and query provided. If no context is available, use your knowledge to provide the best possible advice." },
-          { role: "user", content: `Context: ${context}\n\nQuery: ${prompt}` }
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: `You are a wedding planning expert. Provide detailed, practical advice based on the following context and query:\n\nContext: ${context}\n\nQuery: ${prompt}` }
+            ]
+          }
         ],
-        temperature: 0.7
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+          topP: 0.95,
+          topK: 40
+        }
       })
     });
     
     const data = await response.json();
-    return data.choices[0].message.content;
+    console.log("Gemini API response:", JSON.stringify(data).substring(0, 500) + "...");
+    
+    if (data.candidates && data.candidates[0]?.content?.parts?.length > 0) {
+      return data.candidates[0].content.parts[0].text || "No content generated.";
+    }
+    
+    if (data.error) {
+      console.error("Gemini API error:", data.error);
+      return `Error from Gemini API: ${data.error.message || JSON.stringify(data.error)}`;
+    }
+    
+    return "Unable to generate response from Gemini API.";
   } catch (error) {
-    console.error("Error in getAIResponse:", error);
+    console.error("Error in getGeminiResponse:", error);
     return `Error generating response: ${error.message}`;
   }
 }
@@ -143,7 +162,7 @@ async function processAgentTask(agentKey: string, inputs: any) {
     console.log(`Search results: ${searchResults.organic ? searchResults.organic.length : 0} items`);
     
     const context = JSON.stringify(searchResults.organic?.slice(0, 3) || []);
-    const response = await getAIResponse(prompt, context);
+    const response = await getGeminiResponse(prompt, context);
     console.log(`Generated response for ${agentKey}`);
     return response;
   } catch (error) {
