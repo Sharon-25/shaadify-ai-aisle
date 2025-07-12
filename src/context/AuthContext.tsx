@@ -3,7 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
 import { useToast } from "@/components/ui/use-toast";
 
-// Initialize Supabase client
+// Initialize Supabase client with Session Pooler for IPv4 compatibility
 const supabaseUrl = "https://uqojhqvqrhgxrerxhzwy.supabase.co";
 const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVxb2pocXZxcmhneHJlcnhoend5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUyNTIxMzUsImV4cCI6MjA2MDgyODEzNX0.Fdik9yqyOQRF5-3MyXjIXB6yOj_NjHYuK6FaqtaD0Ik";
 
@@ -24,18 +24,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    },
+    db: {
+      schema: 'public'
+    },
+    global: {
+      headers: {
+        'x-application-name': 'wedding-planner'
+      }
+    }
+  });
 
   useEffect(() => {
     // Check if there's an active session
     const getUser = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        setUser(session.user);
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error("Session error:", error);
+          toast({
+            variant: "destructive",
+            title: "Connection Error",
+            description: "Unable to connect to authentication service. Please check your network connection.",
+          });
+        } else if (session?.user) {
+          setUser(session.user);
+        }
+      } catch (error) {
+        console.error("Auth initialization error:", error);
+        toast({
+          variant: "destructive",
+          title: "Network Error",
+          description: "Network connectivity issue. Please try again.",
+        });
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     getUser();
@@ -43,7 +73,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set up auth state listener
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state change:", event, session?.user?.email);
       setUser(session?.user || null);
       setLoading(false);
     });
@@ -51,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [supabase.auth, toast]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -62,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) {
+        console.error("Sign in error:", error);
         toast({
           variant: "destructive",
           title: "Sign in failed",
@@ -77,8 +109,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Sign in error:", error);
       toast({
         variant: "destructive",
-        title: "Something went wrong",
-        description: "Please try again later",
+        title: "Connection Error",
+        description: "Unable to connect to authentication service. Please check your network.",
       });
     } finally {
       setLoading(false);
@@ -96,10 +128,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             full_name: fullName,
             username: username,
           },
+          emailRedirectTo: `${window.location.origin}/`
         },
       });
 
       if (error) {
+        console.error("Sign up error:", error);
         toast({
           variant: "destructive",
           title: "Sign up failed",
@@ -115,8 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Sign up error:", error);
       toast({
         variant: "destructive",
-        title: "Something went wrong",
-        description: "Please try again later",
+        title: "Connection Error",
+        description: "Unable to connect to authentication service. Please check your network.",
       });
     } finally {
       setLoading(false);
